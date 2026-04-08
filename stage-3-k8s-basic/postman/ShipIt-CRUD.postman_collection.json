@@ -1,0 +1,191 @@
+{
+  "info": {
+    "_postman_id": "b1f5f8fd-fb85-4eef-a5c2-7fd14a6269e3",
+    "name": "ShipIt CRUD API",
+    "description": "CRUD calls for the ShipIt Todos API used in Stage 3 of the workshop.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "todoId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Todo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Ship v1.0\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/todos",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "todos"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "var body = {};",
+              "try {",
+              "    body = pm.response.json();",
+              "} catch (e) {}",
+              "",
+              "if (body.id) {",
+              "    pm.collectionVariables.set('todoId', String(body.id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Todos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/todos",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "todos"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Todo",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"done\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/todos/{{todoId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "todos",
+            "{{todoId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Todo",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/todos/{{todoId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "todos",
+            "{{todoId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 204', function () {",
+              "    pm.response.to.have.status(204);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    }
+  ]
+}

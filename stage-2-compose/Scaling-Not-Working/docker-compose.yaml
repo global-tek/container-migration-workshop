@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  ShipIt Workshop — Stage 2: docker-compose.yaml
+#
+#  Everything stage-1 did manually is now declared here.
+#  Run:  docker compose up --build
+#  Stop: docker compose down          (add -v to also wipe volumes)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: shipit
+
+services:
+
+  # ── Database ────────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       todos
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-supersecret}   # override via .env file
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # NOT published to host — only reachable on the internal compose network
+
+  # ── Backend API ─────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ../stage-0-dockerfiles/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST:     db         # compose service name is the DNS hostname
+      DB_PORT:     5432
+      DB_NAME:     todos
+      DB_USER:     postgres
+      DB_PASSWORD: ${DB_PASSWORD:-supersecret}
+      FLASK_DEBUG: "false"
+    ports:
+      - "5000:5000"            # only for direct testing; remove in production
+    depends_on:
+      db:
+        condition: service_healthy   # wait for pg_isready before starting
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../stage-0-dockerfiles/frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BACKEND_HOST: api          # nginx.conf template resolves this at startup
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    driver: local

@@ -1,0 +1,12 @@
+# Non-secret configuration — safe to commit
+# Replaces: --env flags that aren't secrets
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: shipit
+data:
+  DB_HOST:     "db"         # Kubernetes Service name — same as compose service name!
+  DB_PORT:     "5432"
+  DB_NAME:     "todos"
+  FLASK_DEBUG: "false"

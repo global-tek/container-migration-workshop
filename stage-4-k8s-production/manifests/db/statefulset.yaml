@@ -1,0 +1,71 @@
+# In production Postgres should be a StatefulSet, not a Deployment.
+#
+# Why StatefulSet?
+#   • Stable, predictable pod names (db-0, db-1…)
+#   • Ordered, graceful scaling and rolling updates
+#   • Each replica gets its own PVC via volumeClaimTemplates
+#   • Required for primary/replica setups (e.g. Patroni, Stolon)
+#
+# For a single-node Postgres the difference is mainly the stable name & PVC handling.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: shipit
+  labels:
+    app: db
+spec:
+  serviceName: db          # must match the headless Service name below
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      terminationGracePeriodSeconds: 60    # give postgres time to finish transactions
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "todos"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata  # avoid mount-point ownership issues
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

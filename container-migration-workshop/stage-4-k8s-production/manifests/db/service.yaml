@@ -1,0 +1,15 @@
+# Headless Service for StatefulSet — clusterIP: None gives each pod its own DNS A record.
+# Pod DNS:  db-0.db.shipit.svc.cluster.local
+# For most single-instance use cases, connecting to "db" still works fine.
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: shipit
+spec:
+  clusterIP: None          # headless — required for StatefulSet stable DNS
+  selector:
+    app: db
+  ports:
+    - port: 5432
+      targetPort: 5432

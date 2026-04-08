@@ -1,0 +1,83 @@
+# Replaces: docker run shipit-api + --env + --restart + depends_on
+#
+# Key differences from compose:
+#  • Image must be pushed to a registry (Docker Hub, ECR, GCR…)
+#    For local dev with kind:  kind load docker-image shipit-api:latest
+#    For minikube:             minikube image load shipit-api:latest
+#  • depends_on does not exist — use readinessProbe + initContainers instead
+#  • replicas > 1 is free: compose had no equivalent
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shipit
+  labels:
+    app: api
+spec:
+  replicas: 2             # horizontal scale — impossible with plain docker run
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      # Wait for postgres to accept connections before the app pod starts
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h db -U postgres; do
+                echo "waiting for db…"; sleep 2;
+              done
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+
+      containers:
+        - name: api
+          image: shipit-api:latest
+          imagePullPolicy: IfNotPresent   # use local image in dev; change to Always in production
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: api-config          # loads DB_HOST, DB_PORT, DB_NAME, FLASK_DEBUG
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
