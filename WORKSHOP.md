@@ -744,7 +744,15 @@ Options from least to most mature:
 
 Quick Sealed Secrets example:
 ```bash
-brew install kubeseal
+# Ubuntu / Debian (x86_64)
+sudo apt update
+sudo apt install -y curl jq tar
+
+KUBESEAL_VERSION=$(curl -s https://api.github.com/repos/bitnami-labs/sealed-secrets/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+curl -LO "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz"
+tar -xvzf kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz kubeseal
+sudo install -m 755 kubeseal /usr/local/bin/kubeseal
+kubeseal --version
 # Seal a secret (safe to commit)
 kubectl create secret generic db-credentials \
   --from-literal=username=postgres \
@@ -752,6 +760,42 @@ kubectl create secret generic db-credentials \
   --dry-run=client -o yaml \
   | kubeseal --format yaml > sealed-db-credentials.yaml
 ```
+
+Proof it works (end-to-end in your cluster):
+```bash
+# 1) Install controller (safe to run again; it will be configured/applied)
+kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.36.6/controller.yaml
+kubectl wait -n kube-system --for=condition=available deploy/sealed-secrets-controller --timeout=120s
+
+# 2) Ensure kubeseal uses the same active cluster context
+KCFG=$(mktemp)
+kubectl config view --raw > "$KCFG"
+export KUBECONFIG="$KCFG"
+
+# 3) Seal -> apply -> read back the unsealed Secret value
+kubectl -n shipit create secret generic kubeseal-proof \
+  --from-literal=token=proof-from-kubeseal \
+  --dry-run=client -o yaml \
+  | kubeseal --controller-name sealed-secrets-controller --controller-namespace kube-system --format yaml \
+  | kubectl apply -f -
+
+kubectl -n shipit get secret kubeseal-proof -o jsonpath='{.data.token}' | base64 -d; echo
+# Expected output: proof-from-kubeseal
+
+# 4) Cleanup proof artifacts
+kubectl -n shipit delete sealedsecret kubeseal-proof --ignore-not-found=true
+rm -f "$KCFG"
+```
+
+Troubleshooting:
+- If you see `error: invalid configuration: no configuration has been provided`, `kubeseal` cannot find your kubeconfig.
+- Fix: export a kubeconfig file before running `kubeseal`:
+  ```bash
+  KCFG=$(mktemp)
+  kubectl config view --raw > "$KCFG"
+  export KUBECONFIG="$KCFG"
+  ```
+  Then re-run the seal command.
 
 ---
 
