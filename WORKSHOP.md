@@ -308,11 +308,14 @@ sudo mv ./kind /usr/local/bin/kind
 
 # Standard local cluster
 kind create cluster --name shipit
+'''
+'''bash
+### If using EC2: recreate with external NodePort mapping (host TCP 30800)
+kind delete cluster --name shipit
+kind create cluster --config stage-3-k8s-basic/kind-nodeport.yaml
+'''
 
-# Optional: recreate with external NodePort mapping (host TCP 30800)
-# kind delete cluster --name shipit
-# kind create cluster --config stage-3-k8s-basic/kind-nodeport.yaml
-
+'''bash
 # Option B — minikube
 brew install minikube
 minikube start
