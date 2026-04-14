@@ -677,6 +677,41 @@ curl http://shipit.local:8080
 
 Open http://shipit.local:8080 (or http://shipit.local if you used sudo on port 80) — traffic now flows through the Ingress.
 
+#### Ingress simulation: watch one request cross all layers
+
+Run these in separate terminals to observe the request path in real time.
+
+```bash
+# Terminal A: ingress controller logs (edge router)
+kubectl logs -n ingress-nginx deploy/ingress-nginx-controller -f --tail=20
+```
+
+```bash
+# Terminal B: frontend logs (Nginx app container)
+kubectl logs -n shipit -l app=frontend -f --tail=20
+```
+
+```bash
+# Terminal C: api logs (Flask backend)
+kubectl logs -n shipit -l app=api -f --tail=20
+```
+
+```bash
+# Terminal D: send traffic through ingress host routing
+curl -i http://shipit.local:8080/
+curl -i http://shipit.local:8080/api/health
+curl -s -X POST http://shipit.local:8080/api/todos \
+  -H "Content-Type: application/json" \
+  -d '{"title":"ingress test"}'
+curl -s http://shipit.local:8080/api/todos
+```
+
+What this proves:
+- Ingress Controller accepts traffic for `Host: shipit.local`.
+- Ingress forwards `/` to the `frontend` Service.
+- Frontend Nginx proxies `/api/*` to the `api` Service.
+- API handles CRUD calls while the browser only talks to one public entrypoint.
+
 ### 4.2  Horizontal Pod Autoscaler
 
 Open [stage-4-k8s-production/manifests/api/hpa.yaml](stage-4-k8s-production/manifests/api/hpa.yaml).
@@ -701,6 +736,47 @@ kubectl apply -f stage-4-k8s-production/manifests/frontend/hpa.yaml
 # Watch autoscaling decisions
 kubectl get hpa -n shipit --watch
 ```
+
+#### HPA simulation: force scale-up, then watch scale-down
+
+HPA needs metrics. If `TARGETS` shows `<unknown>`, install metrics-server first:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl wait -n kube-system --for=condition=available deploy/metrics-server --timeout=120s
+```
+
+Open three terminals:
+
+```bash
+# Terminal A: watch HPA decisions
+kubectl get hpa -n shipit --watch
+```
+
+```bash
+# Terminal B: watch replica count change
+kubectl get deploy -n shipit api frontend -w
+```
+
+```bash
+# Terminal C: generate concurrent traffic through ingress for ~2 minutes
+seq 1 10000 | xargs -I{} -P 80 curl -s -o /dev/null http://shipit.local:8080/api/todos
+```
+
+Optional deeper visibility:
+
+```bash
+kubectl top pods -n shipit
+kubectl describe hpa api -n shipit
+kubectl describe hpa frontend -n shipit
+```
+
+Expected behavior:
+- CPU rises above target (`api` target 70%, `frontend` target 60%).
+- HPA increases replicas within min/max bounds.
+- After load stops, utilization drops and HPA scales back down gradually.
+
+This demonstrates HPA's purpose: match capacity to demand automatically, instead of manually scaling deployments.
 
 ### 4.3  Database: Deployment → StatefulSet
 
